@@ -56,16 +56,17 @@
 	this.wheel = wheel;
 	this.idx = wheel.size() - 1;
 	this.sparse_wheel = [];
+	this.pushes = 0;
     }
 
     ModifiableSpinningWheelPointer.prototype = {
-	size: function () { return this.wheel.size() + this.sparse_wheel.length; },
+	size: function () { return this.wheel.size() + this.pushes;; },
 	hasElem: function () { return this.size() > 0; },
 	getElem: function () { 
 	    if (this.sparse_wheel.hasOwnProperty(this.idx)) { 
 		return this.sparse_wheel[this.idx];
 	    } else {
-		return this.wheel.getIdx(idx);
+		return this.wheel.getIdx(this.idx);
 	    }
 	},
 	goBack: function () { 
@@ -74,13 +75,11 @@
 	},
 	goForward: function () { 
 	    this.idx++;
-	    if(this.idx >= this.size()) this.idx = this.idx - this.size();
+	    if(this.idx >= this.size()) this.idx -= this.size();
 	},
-	push: function (elem) { this.sparse_wheel.push(elem); },
+	push: function (elem) { this.sparse_wheel.push(elem); this.pushes++; },
 	modify: function (elem) { 
-	    if (this.getElem() != elem) {
-		this.sparse_wheel[this.idx] = elem;
-	    }
+	    this.sparse_wheel[this.idx] = elem;
 	}	    
     };
 
@@ -147,7 +146,7 @@
 
     $.fn.ajaxConsolePrompt = function (userConfig) { 
 	var container = $(this);
-	if (container.length == 0) return container;;
+	if (container.length == 0) return container;
 	if ($(this).size() != 1) { 
 	    throw new Error("Need one element in container to work");
 	}
@@ -158,18 +157,16 @@
 	    history: new SpinningWheel(1000),
 	    promptExecutor: noop
 	};
-	var config = $.extend({}, defaultConfig, userConfig || {});
+	var config = $.extend({}, defaultConfig, userConfig || {}), 
+	    has_focus = true,
+            prompt = createElem("span").addClass("jac-prompt"), 
+	    cursor_pos = 0,
+	    alive = true,
+	    string = "";
+
 	
-	var has_focus = true;
-	var prompt = createElem("span").addClass("jac-prompt");
 	container.append(prompt);
 	
-	var cursor_pos = 0;
-	var alive = true;
-
-	var string = "";
-	var last_command, repeat_command;
-
 	$(document).bind('keydown', keyDown);
 	$(document).bind('keypress', keyPress);
 	updatePrompt();
@@ -203,6 +200,8 @@
 	    8: backwardDeleteWord, // M-backspace,
 	    66: backwardWord, // M-b
 	    70: forwardWord, // M-f
+	    78: downHistory, // M-n
+	    80: upHistory, // M-p
 	    68: forwardDeleteWord, // M-d
 	    89: nextYank // M-y
 	};
@@ -218,6 +217,7 @@
 	
 	return extern;
 
+
 	function promptExecutor() { 
 	    return config.promptExecutor(string);
 	}
@@ -226,6 +226,7 @@
 	    return charcode - 32;
 	}
 
+	var last_command, repeat_command;
 
 	function keyDownCmd(e, which_offset) { 
 	    var code = e.keyCode || charcode2keycode(e.charCode);
@@ -276,12 +277,33 @@
 	    }
 	}
 
+	var history_pointer;
+	function getHistoryPointer() { 
+	    if (!history_pointer) {
+		history_pointer = config.history.getModifiablePointer();
+		history_pointer.push(string);
+		history_pointer.goForward();
+	    }
+	    return history_pointer;
+	}
+
+	function updateHistory() { 
+	    getHistoryPointer().modify(string);
+	}
+
 	function upHistory() { 
+	    updateHistory();
+	    getHistoryPointer().goBack();
+	    string = getHistoryPointer().getElem();
+	    cursor_pos = string.length;
 	}
 	
 	function downHistory() { 
+	    updateHistory();
+	    getHistoryPointer().goForward();
+	    string = getHistoryPointer().getElem();
+	    cursor_pos = string.length;
 	}
-
 	    
 	var kill_pointer, last_yank_cursor_pos;
 	    
