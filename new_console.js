@@ -26,13 +26,13 @@
 	var i = 0;
 	while (i < str.length) { 
 	    var start = i;
-	    while(i < str.length && isspace(str.substring(i, i + 1))) ++i;
+	    while(i < str.length && isspace(str[i])) ++i;
 	    outp = outp.concat(split_up(str.substring(start, i), 
 					function (str) { 
 					    return str.replace(/ /g, "&nbsp;"); 
 					}));
 	    start = i;
-	    while(i < str.length && !isspace(str.substring(i, i + 1))) ++i;
+	    while(i < str.length && !isspace(str[i])) ++i;
 	    var substr = str.substring(start, i);
 	    outp = outp.concat(split_up(substr));
 	}
