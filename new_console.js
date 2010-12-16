@@ -31,16 +31,21 @@
 	    
 	var i = 0;
 	while (i < str.length) { 
-	    var start = i;
-	    while(i < str.length && isspace(str[i])) ++i;
-	    outp = outp.concat(split_up(str.substring(start, i), 
-					function (str) { 
-					    return str.replace(/ /g, "&nbsp;"); 
-					}));
-	    start = i;
-	    while(i < str.length && !isspace(str[i])) ++i;
-	    var substr = str.substring(start, i);
-	    outp = outp.concat(split_up(substr));
+	    var m = /^\s*/.exec(str.substring(i));
+	    if (m) {
+		outp = outp.concat(split_up(str.substring(i, i + m[0].length), 
+					    function (str) { 
+						return str.replace(/ /g, "&nbsp;"); 
+					    }));
+		i += m[0].length;
+	    }
+
+	    var m = /^[^\s]*/.exec(str.substring(i));
+	    if (m) {
+		var substr = str.substring(i, i + m[0].length);
+		outp = outp.concat(split_up(substr));
+		i += m[0].length;
+	    }
 	}
 	
 	return outp.join("<wbr />");
@@ -65,6 +70,7 @@
     
     SearchPointer.prototype = {
 	traverse: function (search_term, traverse_method) {
+
 	    var nr = this.wheel_pointer.size();
 	    while (nr-- > 0) {
 		this.wheel_pointer[traverse_method]();
@@ -110,7 +116,7 @@
 	    this.idx++;
 	    if(this.idx >= this.size()) this.idx -= this.size();
 	},
-	push: function (elem) { this.sparse_wheel.push(elem); this.pushes++; },
+	push: function (elem) { this.sparse_wheel[this.size()] = elem; this.pushes++; },
 	modify: function (elem) { 
 	    this.sparse_wheel[this.idx] = elem;
 	}	    
@@ -184,10 +190,12 @@
 	    hasFocus: function () { return true; },
 	    historyPointer: (new SpinningWheel(1000)).getPointer(),
 	    onStop: noop,
+	    onUpdatePrompt: noop,
 	    startString: ""
 	};
 	var promptDisplay = $(this);
 	var direction = "goBack";
+	var is_blinking = false;
 
 	if (promptDisplay.length == 0) return null;
 	if (promptDisplay.length != 1) {
@@ -201,14 +209,8 @@
 	$(document).bind('keypress', keyPress);
 	$(document).bind('keydown', keyDown);
 	
-	var is_blinking = false;
-	function blink () {
-	    if (!is_blinking) { 
-		is_blinking = true;
-		promptDisplay.fadeOut(200).fadeIn(200, function () { is_blinking = false });
-	    }
-	}
-	    
+	updatePrompt();
+
 	return {
 	    stop: stop,
 	    getString: function () { return string; }
@@ -230,12 +232,22 @@
 	    return true;
 	}
 
+	function blink () {
+	    if (!is_blinking) { 
+		is_blinking = true;
+		promptDisplay.fadeTo(200, 0.1).fadeTo(200, 1.0, function () { 
+		    config.onUpdatePrompt(); 
+		    is_blinking = false 
+		});
+	    }
+	}
 	function makeRegexp(str) { 
 	    return new RegExp(regexp_escape(str), "i");
 	}
+	
 	function keyDown(e) { 
 	    if(!config.hasFocus()) return true;
-
+	    
 	    if (e.keyCode && e.ctrlKey) {
 		if (e.keyCode == 82) { // C-r
 		    searchPointer.goBack(makeRegexp(string));
@@ -245,29 +257,40 @@
 		    searchPointer.goForward(makeRegexp(string));
 		    updatePrompt();
 		    return false;
-		} 
+		} else if (e.keyCode == 71) { // C-g
+		    stop(config.startString);
+		    return false;
+		}
+	    } else if (e.altKey && e.keyCode) {
+		if (e.keyCode == 8) { 
+		    string = "";
+		    updatePrompt();
+		    return false;
+		}
 	    } else if (e.keyCode) { 
 		if (e.keyCode == 8) {  // backspace
 		    if (string) {
 			string = string.substring(0, string.length - 1);
-			updatePrompt();
+			    updatePrompt();
 			return false;
 		    }
+		} else if (e.keyCode == 13) { // enter
+		    stop();
 		}
 	    }
-
-	    return true;
+	    return false;
 	}
 	
 	function updatePrompt() { 
 	    $(promptDisplay).empty()
 		.text("Searching(" + (string || "") + ")> " + (searchPointer.getElem() || ""));
+	    config.onUpdatePrompt();
 	}
 
-	function stop() { 
+	function stop(stopElem) { 
 	    $(document).unbind('keypress', keyPress);
 	    $(document).unbind('keydown', keyDown);
-	    config.onStop(searchPointer.getElem());
+	    config.onStop(stopElem || searchPointer.getElem());
 	}
     }
 	
@@ -290,7 +313,9 @@
 	    has_focus = true, alive = true,
             prompt = createElem("span").addClass("jac-prompt"), 
 	    cursor_pos = 0,
-	    string = "";
+	    string = "",
+	    ignore_input = false;
+	
 	
 	var ops = {
 	    37: backwardChar, // left
@@ -359,22 +384,22 @@
 	}
 	
 	function keyDown(e) { 
-	    if (!hasFocus() || !isAlive()) return;
-	    
+	    if (!hasFocus() || !isAlive() || ignore_input) return;
+
 	    var cmd = keyDownCmd(e);
 	    if (!cmd) return;
 	    
-	    cmd();
-	    updatePrompt();
-	    last_command = cmd;
+	    var res = cmd();
+	    if (!res || !res.noUpdatePrompt) updatePrompt();
+	    if (!res || !res.dontSetLastCommand) last_command = cmd;
 	    repeat_command = false;
 	    return false;
 	}
 	    
 	function keyPress(e) { 
-	    if (!hasFocus() || !isAlive()) return;
+	    if (!hasFocus() || !isAlive() || ignore_input) return;
 	    
-	    if(e.charCode && !e.ctrlKey) {
+	    if(e.charCode && !e.ctrlKey && !e.altKey) {
 		var c = String.fromCharCode(e.charCode);
 		addChar(c);
 		last_command = null;
@@ -404,7 +429,6 @@
 	}
 
 	var last_command, repeat_command;
-	    
 
 	var history_pointer;
 	function getHistoryPointer() { 
@@ -478,6 +502,7 @@
 	    while(pointer < string.length && isword(string.substring(pointer))) pointer++;
 	    return pointer;
 	}
+
 	function _backwardWord(pointer) { 
 	    while (pointer > 0 && !isword(string.substring(pointer - 1))) pointer--;
 	    while (pointer > 0 && isword(string.substring(pointer - 1))) pointer--;
@@ -487,9 +512,11 @@
 	function backwardChar() { 
 	    if (cursor_pos > 0) cursor_pos--;
 	}
+
 	function forwardChar() { 
 	    if (cursor_pos < string.length) cursor_pos++; 
 	} 
+
 	function forwardDeleteWord() { 
 	    delete_til = _forwardWord(cursor_pos);
 	    string = string.substring(0, cursor_pos) + string.substring(delete_til);
@@ -505,27 +532,33 @@
 	    if (!string || cursor_pos == 0) return; 
 	    string = string.substring(0, cursor_pos - 1) + string.substring(cursor_pos);
 	    cursor_pos--;
-	}    
+	}
+
 	function forwardDelete() {
 	    if (!string || cursor_pos == string.length) return;
 	    string = string.substring(0, cursor_pos) + string.substring(cursor_pos + 1);
 	}
-
+	
 	function historySearch() {
+	    ignore_input = true;
 	    prompt.searchHistoryPrompt({
 		historyPointer: getHistoryPointer(),
 		hasFocus: hasFocus,
+		onUpdatePrompt: config.onUpdatePrompt,
 		onStop: function (str) { 
-		    console.log("Stopping with: " + str);
 		    if (str) {
-			console.log(str);
-			string = str;
+			string = str || "";
 			cursor_pos = string.length;
 		    }
+		    ignore_input = false;
 		    updatePrompt();
 		},
 		startString: string
 	    });
+	    return { 
+		noUpdatePrompt: true,
+		dontSetLastCommand: true
+	    }
 	}
 
 	function forwardWord() {
