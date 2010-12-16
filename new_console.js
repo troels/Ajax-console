@@ -2,6 +2,8 @@
     function createElem(tag, ctxt) { 
 	return $((ctxt || document).createElement(tag));
     }
+
+    function noop() {}
     
     function htmlesc(str) { 
 	return str.replace(/&/g, "&amp;")
@@ -10,6 +12,10 @@
 	          .replace(/"/g, "&quot;")
 	          .replace(/'/g, "&#146;")
 	          .replace(/ /g, "&nbsp");
+    }
+    
+    function regexp_escape(str) { 
+	return str.replace(/[][.?*+{}()^$\\]/g, "\\\\$1");
     }
 
     function make_breakable(str) {
@@ -37,7 +43,7 @@
 	    outp = outp.concat(split_up(substr));
 	}
 	
-	return outp.join("<wbr>");
+	return outp.join("<wbr />");
     }
     
     function isprintable(c) { 
@@ -52,6 +58,33 @@
 	return /^\w/.test(c);
     }
     
+    function SearchPointer(wheel_pointer) { 
+	this.wheel_pointer = wheel_pointer;
+	this.idx = this.wheel_pointer.size();
+    }
+    
+    SearchPointer.prototype = {
+	traverse: function (search_term, traverse_method) {
+	    var nr = this.wheel_pointer.size();
+	    while (nr-- > 0) {
+		this.wheel_pointer[traverse_method]();
+		if (search_term.test(this.wheel_pointer.getElem())) {
+		    return true;
+		}
+	    }
+	    return false;
+	},
+	getElem: function () { 
+	    return this.wheel_pointer.getElem();
+	},
+	goBack: function (search_term) {
+	    return this.traverse(search_term, 'goBack');
+	},
+	goForward: function (search_term) { 
+	    return this.traverse(search_term, 'goForward');
+	}
+    }
+	
     function ModifiableSpinningWheelPointer(wheel) {
 	this.wheel = wheel;
 	this.idx = wheel.size() - 1;
@@ -90,7 +123,7 @@
     }
     
     SpinningWheelPointer.prototype = {
-	size: function () { return this.wheel.size() + additional.length; },
+	size: function () { return this.wheel.size() + this.additional.length; },
 	hasElem: function () { return this.size() > 0; },
 	getElem: function () { 
 	    if (this.wheel.size() > this.idx) { 
@@ -138,38 +171,126 @@
 	}
     };
     
+    $.newHistory = function (len) { return new SpinningWheel(len || 1000); };
+    
     var GLOBAL_KILLRING = new SpinningWheel(1000);
 
-    $.get_global_killring = function () { 
+    $.getGlobalKillring = function () { 
 	return GLOBAL_KILLRING;
     }
 
+    $.fn.searchHistoryPrompt = function (userConfig) { 
+	var defaultConfig = { 
+	    hasFocus: function () { return true; },
+	    historyPointer: (new SpinningWheel(1000)).getPointer(),
+	    onStop: noop,
+	    startString: ""
+	};
+	var promptDisplay = $(this);
+	var direction = "goBack";
+
+	if (promptDisplay.length == 0) return null;
+	if (promptDisplay.length != 1) {
+	    throw new Error("Need one element to work with");
+	}
+	
+	var config = $.extend({}, defaultConfig, userConfig);
+	var string = config.startString;
+	var searchPointer = new SearchPointer(config.historyPointer);
+	
+	$(document).bind('keypress', keyPress);
+	$(document).bind('keydown', keyDown);
+	
+	var is_blinking = false;
+	function blink () {
+	    if (!is_blinking) { 
+		is_blinking = true;
+		promptDisplay.fadeOut(200).fadeIn(200, function () { is_blinking = false });
+	    }
+	}
+	    
+	return {
+	    stop: stop,
+	    getString: function () { return string; }
+	};
+
+	function keyPress(e) { 
+	    if (!config.hasFocus()) return true;
+
+	    if (e.charCode && !e.ctrlKey) { 
+		var new_string = string + String.fromCharCode(e.charCode);
+		if(searchPointer.goBack(makeRegexp(new_string))) {
+		    string = new_string;
+		} else { 
+		    blink();
+		}
+		updatePrompt();
+		return false;
+	    }
+	    return true;
+	}
+
+	function makeRegexp(str) { 
+	    return new RegExp(regexp_escape(str), "i");
+	}
+	function keyDown(e) { 
+	    if(!config.hasFocus()) return true;
+
+	    if (e.keyCode && e.ctrlKey) {
+		if (e.keyCode == 82) { // C-r
+		    searchPointer.goBack(makeRegexp(string));
+		    updatePrompt();
+		    return false;
+		} else if (e.keyCode == 83) { // C-s
+		    searchPointer.goForward(makeRegexp(string));
+		    updatePrompt();
+		    return false;
+		} 
+	    } else if (e.keyCode) { 
+		if (e.keyCode == 8) {  // backspace
+		    if (string) {
+			string = string.substring(0, string.length - 1);
+			updatePrompt();
+			return false;
+		    }
+		}
+	    }
+
+	    return true;
+	}
+	
+	function updatePrompt() { 
+	    $(promptDisplay).empty()
+		.text("Searching(" + (string || "") + ")> " + (searchPointer.getElem() || ""));
+	}
+
+	function stop() { 
+	    $(document).unbind('keypress', keyPress);
+	    $(document).unbind('keydown', keyDown);
+	    config.onStop(searchPointer.getElem());
+	}
+    }
+	
     $.fn.ajaxConsolePrompt = function (userConfig) { 
 	var container = $(this);
-	if (container.length == 0) return container;
+	if (container.length == 0) return null;
 	if ($(this).size() != 1) { 
 	    throw new Error("Need one element in container to work");
 	}
 		
 	var defaultConfig = {
 	    prompt: '> ',
-	    killring: $.get_global_killring(),
+	    killring: $.getGlobalKillring(),
 	    history: new SpinningWheel(1000),
-	    promptExecutor: noop
+	    promptExecutor: noop,
+	    onUpdatePrompt: noop
 	};
+
 	var config = $.extend({}, defaultConfig, userConfig || {}), 
-	    has_focus = true,
+	    has_focus = true, alive = true,
             prompt = createElem("span").addClass("jac-prompt"), 
 	    cursor_pos = 0,
-	    alive = true,
 	    string = "";
-
-	
-	container.append(prompt);
-	
-	$(document).bind('keydown', keyDown);
-	$(document).bind('keypress', keyPress);
-	updatePrompt();
 	
 	var ops = {
 	    37: backwardChar, // left
@@ -183,19 +304,21 @@
 	    13: promptExecutor, //return
 	    // 18: noop //tab
 	};
-
+	    
 	var ctrlOps = {
 	    65: moveToStart, // C-a
 	    69: moveToEnd, // C-e
 	    68: forwardDelete, // C-d
 	    78: noop, // C-n
 	    80: noop, // C-p
+	    82: historySearch, // C-r
+	    83: historySearch, // C-s
 	    70: forwardChar, // C-f
 	    66: backwardChar, // C-b
 	    75: deleteTilEnd, // C-k
 	    89: yank // C-y
 	};
-
+	
 	var altOps = {
 	    8: backwardDeleteWord, // M-backspace,
 	    66: backwardWord, // M-b
@@ -206,29 +329,24 @@
 	    89: nextYank // M-y
 	};
 
-	var extern = {
+	
+	container.append(prompt);
+	
+	updatePrompt();
+	$(document).bind('keydown', keyDown);
+	$(document).bind('keypress', keyPress);
+
+	return {
 	    isAlive: isAlive,
 	    hasFocus: hasFocus,
 	    stop: stop,
 	    takeFocus: function () { has_focus = true; },
+	    dropFocus: function () { has_focus = false; },
 	    getString: function () { return string; },
 	    getCursorPos: function () { return cursor_pos; }
 	};
 	
-	return extern;
-
-
-	function promptExecutor() { 
-	    return config.promptExecutor(string);
-	}
-
-	function charcode2keycode(charcode) { 
-	    return charcode - 32;
-	}
-
-	var last_command, repeat_command;
-
-	function keyDownCmd(e, which_offset) { 
+	function keyDownCmd(e) { 
 	    var code = e.keyCode || charcode2keycode(e.charCode);
 	    
 	    if (e.ctrlKey) {
@@ -239,10 +357,10 @@
 		return ops[code];
 	    }
 	}
-
+	
 	function keyDown(e) { 
 	    if (!hasFocus() || !isAlive()) return;
-
+	    
 	    var cmd = keyDownCmd(e);
 	    if (!cmd) return;
 	    
@@ -255,8 +373,8 @@
 	    
 	function keyPress(e) { 
 	    if (!hasFocus() || !isAlive()) return;
-
-	    if(e.charCode && !e.ctrlKey && !e.altKey) {
+	    
+	    if(e.charCode && !e.ctrlKey) {
 		var c = String.fromCharCode(e.charCode);
 		addChar(c);
 		last_command = null;
@@ -276,6 +394,17 @@
 		}
 	    }
 	}
+
+	function promptExecutor() { 
+	    return config.promptExecutor(string);
+	}
+
+	function charcode2keycode(charcode) { 
+	    return charcode - 32;
+	}
+
+	var last_command, repeat_command;
+	    
 
 	var history_pointer;
 	function getHistoryPointer() { 
@@ -355,7 +484,6 @@
 	    return pointer;
 	}
 
-	function noop() {}
 	function backwardChar() { 
 	    if (cursor_pos > 0) cursor_pos--;
 	}
@@ -381,6 +509,23 @@
 	function forwardDelete() {
 	    if (!string || cursor_pos == string.length) return;
 	    string = string.substring(0, cursor_pos) + string.substring(cursor_pos + 1);
+	}
+
+	function historySearch() {
+	    prompt.searchHistoryPrompt({
+		historyPointer: getHistoryPointer(),
+		hasFocus: hasFocus,
+		onStop: function (str) { 
+		    console.log("Stopping with: " + str);
+		    if (str) {
+			console.log(str);
+			string = str;
+			cursor_pos = string.length;
+		    }
+		    updatePrompt();
+		},
+		startString: string
+	    });
 	}
 
 	function forwardWord() {
@@ -410,7 +555,7 @@
 		    .append(createElem("span").addClass("jac-cursor").html("&nbsp;&nbsp;"));
 	    } else {
 		var string_start = string.substring(0, cursor_pos),
-         	    string_middle = string.substring(cursor_pos, cursor_pos + 1)
+         	    string_middle = string[cursor_pos],
 	            string_end = string.substring(cursor_pos + 1);
 		
 		prompt.empty()
@@ -419,6 +564,8 @@
                     .append(createElem("span").addClass("jac-cursor").html(htmlesc(string_middle)))
 		    .append(createElem("span").addClass("jac-after-cursor").html(make_breakable(string_end)));
 	    }
+	    
+	    config.onUpdatePrompt();
 	}
 	
 	function addChar(c) { 
@@ -434,7 +581,6 @@
 	function hasFocus() { 
 	    return has_focus;
 	}
-
 
 	function stop() { 
 	    alive = has_focus = false;
@@ -465,9 +611,14 @@
 	    var prompt = createElem("div");
 	    promptController = prompt.ajaxConsolePrompt({ 
 		promptExecutor: promptExecutor,
+		onUpdatePrompt: scrollToBottom,
 		history: history
 	    });
 	    console.append(prompt);
+	    scrollToBottom();
+	}
+
+	function scrollToBottom() { 
 	    console.attr({scrollTop: console.attr("scrollHeight") });
 	}
 

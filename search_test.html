@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+  <title>Yabadabadu</title>
+  <script type="text/javascript" src="jquery-1.4.2.min.js"></script>
+  <script type="text/javascript" src="new_console.js"></script>
+  
+  <style type="text/css" media="screen">
+    #prompt-container { 
+     width: 600px;
+     background: #555;
+     height: 1000px;
+    }
+
+    .jac-cursor { 
+      background: #888;
+      color: #FFF;
+    }
+
+    .jac-prompt { 
+      width: 200px;
+      height: 100px;
+      background: #333;
+      color: #FFF;
+    }
+
+    #console1 .jac-inner { 
+      width: 900px;
+      height: 200px;
+      background: #333;
+      color: #FFF;
+      padding: 0.5em;
+      overflow: auto;
+    }
+  </style>
+</head>
+<body>
+  <div id="log"> </div>
+  <script type="text/javascript">
+    $(function () { 
+     var console = $(document.createElement("div")).attr("id", "console1");
+     var history = $.newHistory();
+     history.push("Hello there"); 
+     history.push("Hello"); 
+     history.push("I am here"); 
+     history.push("Test"); 
+     history.push("Whatever"); 
+     history.push("This is it"); 
+     $('body').append(console);
+     console.searchHistoryPrompt({historyPointer: history.getPointer()});
+    });
+  </script>
+</body>
+</html>
