@@ -15,7 +15,7 @@
     }
     
     function regexp_escape(str) { 
-	return str.replace(/[][.?*+{}()^$\\]/g, "\\\\$1");
+	return str.replace(/[\][.?*+{}()^\\$]/g, "\\$&");
     }
 
     function make_breakable(str) {
@@ -283,7 +283,8 @@
 	
 	function updatePrompt() { 
 	    $(promptDisplay).empty()
-		.text("Searching(" + (string || "") + ")> " + (searchPointer.getElem() || ""));
+		.html("Searching(" + make_breakable(string || "") + ")&gt; " + 
+		      make_breakable(searchPointer.getElem() || ""));
 	    config.onUpdatePrompt();
 	}
 
@@ -624,7 +625,9 @@
     };	
 	
     $.fn.ajaxConsole = function (userConfig) {
-	var defaultConfig = {};
+	var defaultConfig = { 
+	    execCmd: noop
+	};
 
 	var config = $.extend({}, defaultConfig, userConfig || {}),
             container = $(this),
