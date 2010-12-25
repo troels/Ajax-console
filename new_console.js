@@ -5,7 +5,7 @@
 
     function noop() {}
     
-    function htmlesc(str) { 
+    function htmlEscape(str) { 
 	return str.replace(/&/g, "&amp;")
 	          .replace(/</g, "&lt;")
 	          .replace(/>/g, "&gt;")
@@ -14,15 +14,15 @@
 	          .replace(/ /g, "&nbsp");
     }
     
-    function regexp_escape(str) { 
+    function regexpEscape(str) { 
 	return str.replace(/[\][.?*+{}()^\\$]/g, "\\$&");
     }
 
-    function make_breakable(str) {
+    function makeBreakable(str) {
 	var outp = [];
 	function split_up(str, escape_func) { 
 	    var out = [];
-	    escape_func = escape_func || htmlesc;
+	    escape_func = escape_func || htmlEscape;
 	    for (var j = 0; j <= str.length / 8; j++) {
 		out.push(escape_func(str.substring(j * 8, Math.min(j * 8 + 8, str.length))));
 	    }
@@ -51,15 +51,15 @@
 	return outp.join("<wbr />");
     }
     
-    function isprintable(c) { 
+    function isPrintable(c) { 
 	return /^[^\x00-\x1F]/.test(c);
     }
 
-    function isspace(c) {
+    function isSpace(c) {
 	return /^\s/.test(c);
     }
 
-    function isword(c) { 
+    function isWord(c) { 
 	return /^\w/.test(c);
     }
     
@@ -242,7 +242,7 @@
 	    }
 	}
 	function makeRegexp(str) { 
-	    return new RegExp(regexp_escape(str), "i");
+	    return new RegExp(regexpEscape(str), "i");
 	}
 	
 	function keyDown(e) { 
@@ -283,8 +283,8 @@
 	
 	function updatePrompt() { 
 	    $(promptDisplay).empty()
-		.html("Searching(" + make_breakable(string || "") + ")&gt; " + 
-		      make_breakable(searchPointer.getElem() || ""));
+		.html("Searching(" + makeBreakable(string || "") + ")&gt; " + 
+		      makeBreakable(searchPointer.getElem() || ""));
 	    config.onUpdatePrompt();
 	}
 
@@ -499,14 +499,14 @@
 	}
 	
 	function _forwardWord(pointer) {
-	    while(pointer < string.length && !isword(string.substring(pointer))) pointer++;
-	    while(pointer < string.length && isword(string.substring(pointer))) pointer++;
+	    while(pointer < string.length && !isWord(string.substring(pointer))) pointer++;
+	    while(pointer < string.length && isWord(string.substring(pointer))) pointer++;
 	    return pointer;
 	}
 
 	function _backwardWord(pointer) { 
-	    while (pointer > 0 && !isword(string.substring(pointer - 1))) pointer--;
-	    while (pointer > 0 && isword(string.substring(pointer - 1))) pointer--;
+	    while (pointer > 0 && !isWord(string.substring(pointer - 1))) pointer--;
+	    while (pointer > 0 && isWord(string.substring(pointer - 1))) pointer--;
 	    return pointer;
 	}
 
@@ -581,11 +581,11 @@
 	function updatePrompt () { 
 	    if (!isAlive()) {
 		prompt.empty().append(config.prompt).append(
-		    createElem("span").addClass("jac-before-cursor").html(make_breakable(string)));
+		    createElem("span").addClass("jac-before-cursor").html(makeBreakable(string)));
 	    } else if (cursor_pos >= string.length) { 
 		prompt.empty()
 		    .append(config.prompt)
-		    .append(createElem("span").addClass("jac-before-cursor").html(make_breakable(string)))
+		    .append(createElem("span").addClass("jac-before-cursor").html(makeBreakable(string)))
 		    .append(createElem("span").addClass("jac-cursor").html("&nbsp;&nbsp;"));
 	    } else {
 		var string_start = string.substring(0, cursor_pos),
@@ -594,9 +594,9 @@
 		
 		prompt.empty()
 		    .append(config.prompt)
-                    .append(createElem("span").addClass("jac-before-cursor").html(make_breakable(string_start)))
-                    .append(createElem("span").addClass("jac-cursor").html(htmlesc(string_middle)))
-		    .append(createElem("span").addClass("jac-after-cursor").html(make_breakable(string_end)));
+                    .append(createElem("span").addClass("jac-before-cursor").html(makeBreakable(string_start)))
+                    .append(createElem("span").addClass("jac-cursor").html(htmlEscape(string_middle)))
+		    .append(createElem("span").addClass("jac-after-cursor").html(makeBreakable(string_end)));
 	    }
 	    
 	    config.onUpdatePrompt();

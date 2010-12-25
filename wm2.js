@@ -75,7 +75,6 @@
     inherits(LeafTreeNode, AbstractTreeNode);
     
     $.extend(LeafTreeNode.prototype, {
-	getId: function () { 
 	setDomContent: function (domContent) { this.domContent = domContent; } ,
 	getDomContent: function () { return this.domContent; },
 	getWidth: function() { return this.domContent.getWidth(); },
@@ -198,87 +197,35 @@
 		    child.unlink();
 		}
 	    });
-	}
-    };
-
-    function SplitTreeNode(splitDirection, treeNode1, treeNode2, height, width, parent, prevSibling, nextSibling) { 
-	AbstractTreeNode.call(this, parent, prevSibling, nextSibling);
-	this.setDirection(direction);
-	treeNode1.setPrevSibling(null);
-	treeNode1.setNextSibling(treeNode2);
-	treeNode2.setPrevSibling(treeNode1);
-	treeNode2.setNextSibling(null);
-	this.setFirstChild(treeNode1);
-	this.setWidth(width);
-	this.setHeight(height);
-    }
-
-    inherits(HorizontalSplitTreeNode, AbstractTreeNode);
-    
-    $.extend(HorizontalSplitTreeNode.prototype, {
-	setDirection: function (direction) { 
-	    if (direction != "vertical" && direction != "horizontal") 
-		throw new TypeError();
-	    
-	    this.direction = direction;
 	},
-	getDirection: function () { return this.direction; },
-	isHorizontal: function () { return this.direction == "horizontal"; },
-	isVertical: function () { return this.direction == "vertical"; },
-	setFirstChild: function (node) { this.firstChild = node; },
-	getFirstChild: function () { return this.firstChild; },
-	totalChildrenWidth: function () { 
-	    return this.mapChildren(function (child) { return child.getWidth(); })
-		       .reduce(function (accum, x) { return accum + x; }, 0); 
-	},
-	getWidth: function () { return this.width; },
-	setWidth: function (width) { 
-	    if (this.isHorizontal()) {
-		var currentWidth = this.totalChildrenWidth();
-		if (currentWidth != width) { 
-		    var nr_children = this.getNumberOfChildren();
-		    var spare = width % nr_children;
-		    var new_base_width = Math.floor(width / nr_children);
-		    this.mapChildren(function (child) {
-			if (spare > 0) { 
-			    spare--;
-			    child.setWidth(new_base_width + 1);
-			} else { 
-			    child.setWidth(new_base_width);
-			}
-		    });
-		}
-	    } else {
+	delegateVariableDimensions: function (new_dims) { 
+	    var current_dims = this.mapChildren(function (child) { 
+		return child[this.variableDimGetter].call(child);
+	    }),
+	    current_dims_total = current_dims.sum();
+	    if(current_dims_total != new_dims) { 
+		var ratio = new_dims / current_dims_total,
+		    new_dim_cands = this.mapChildren(function (child) { 
+			return Math.floor(child[this.variableDimGetter].call(child) * ratio);
+		    }),
+		    new_dim_cands_sum = new_dim_cands.sum(),
+                    diff = new_dim_cands_sum - new_dims, 
+		    nr_children = this.getNumberOfChildren(),
+		    constant_diff = Math[diff > 0 ? "floor" : "ceil"].call(Math, diff / nr_children),
+		    spare = diff - constant_diff * nr_children;
+
 		this.mapChildren(function (child) { 
-		    child.setWidth(width);
+		    var correction = new_dim_cands.shift() + constant_diff;
+		    if (spare > 0) {
+			spare--;
+			correction++;
+		    } else if (spare < 0) {
+			spare++
+			correction--;
+		    }
+		    child[this.variableDimSetter].call(child, correction);
 		});
 	    }
-	    this.width = width;
-	},
-	getHeight: function () { return this.height; },
-	setHeight: function (height) { 
-	    if (height != this.getHeight()) { 
-		this.mapChildren(function (child) { child.setHeight(height); });
-	    } 
-	    this.height = height;
-	},
-	resizeFromLeft: function(offset) {
-	    var first_child = this.getFirstChild();
-	    first_child.setWidth(first_child.getWidth() + offset);
-	    this.setWidth(this.getWidth() + offset);
-	},
-	resizeFromRight: function (offset) { 
-	    var last_child = this.getLastChild();
-	    last_child.setWidth(last_child.getWidth() + offset);
-	    this.setWidth(this.getWidth() + offset);
-	},
-	resizeFromTop: function (offset) { 
-	    this.setHeight(this.getHeight() + offset);
-	},
-	resizeFromBottom: function (offset) {
-	    this.setHeight(this.getHeight() + offset);
-	},
-    });
-    
-    
+	}
+    }));
 })(jQuery);
