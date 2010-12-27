@@ -3,7 +3,8 @@
 	function F() {}
 	F.prototype = from.prototype;
 	to.prototype = new F();
-	to.prototype.constructor = from;
+	to.prototype.constructor = to;
+	to.prototype.superClass_ = from.prototype;
     }
     
     Array.prototype.reduce = Array.prototype.reduce || 
@@ -45,6 +46,63 @@
 	return id_counter++;
     }
 
+    $.fn.windowManager = function() { 
+	var $elem = $(this);
+	if ($elem.size() != 1) throw TypeError();
+	var width = $elem.width(), height = $elem.height(),
+	    point = new Point($elem.offset().left, $elem.offset().top),
+	    window = new Window($(document.createElement("div")), point)
+            leafnode = new LeafTreeNode(window, point, width, height, null, null, null),
+            root = new RootTreeNode(leafnode, point, width, height);
+	return root;
+    }
+    
+    function Point(x, y) { 
+	this.x = x;
+	this.y = y;
+    }
+
+    $.extend(Point.prototype, {
+	getX: function () { return this.x; },
+	getY: function () { return this.y; },
+	plus: function (point) { 
+	    return new Point(this.getX() + point.getX(), 
+			     this.getY() + point.getY());
+	},
+	plusX: function (x) { 
+	    return new Point(this.getX() + x,
+			     this.getY());
+	},
+	plusY: function (y) { 
+	    return new Point(this.getX(), this.getY() + y);
+	}
+    });
+    
+    function Window(domContent, pos) { 
+	this.setDomContent($(domContent).css("position", "absolute"));
+	this.setPos(pos);
+    }
+
+    $.extend(Window.prototype, {
+	setDomContent: function (domContent) { this.domContent = $(domContent); },
+	getDomContent: function () { return this.domContent; },
+	setPos: function (pos) { 
+	    this.pos = pos; 
+	    this.getDomContent().css("left", pos.getX() + "px").css("top", pos.getY() + "px");
+	},
+	getPos: function () { return this.pos; },
+	setWidth: function (width) { this.cachedWidth = width; this.getDomContent().css("width", width + "px"); },
+	getWidth: function () { 
+	    return this.hasOwnProperty('cachedWidth') ? this.cachedWidth : this.getDomContent().width(); 
+	},
+	setHeight: function(height) { this.cachedHeight = height; this.getDomContent().css("height", height + "px");},
+	getHeight: function () { 
+	    return this.hasOwnProperty('cachedHeight') ? this.cachedHeight : this.getDomContent().height();
+	},
+	remove: function () { this.getDomContent.detach(); }
+    });
+	
+	    
     function AbstractTreeNode(parent, prevSibling, nextSibling) {
 	this.setId(getNextTreeNodeId());
 	this.setParent(parent);
@@ -52,7 +110,7 @@
 	this.setNextSibling(nextSibling);
     };
     
-    AbstractTreeNode.prototype = {
+    $.extend(AbstractTreeNode.prototype, {
 	setId: function (id) { this.id = id; },
 	getId: function () { return this.id; },
 	setParent: function (parent) { this.parent = parent; },
@@ -62,32 +120,75 @@
 	setNextSibling: function (nextSibling) { this.nextSibling = nextSibling; },
 	getNextSibling: function () { return this.nextSibling; },
 	unlink: function () { this.setParent(null); this.setPrevSibling(null); this.setNextSibling(null); },
-	remove: function () { }
-    };
-
-    function LeafTreeNode(domContent, height, width, parent, prevSibling, nextSibling) { 
-	AbstractTreeNode.call(this, parent, prevSibling, nextSibling);
-	this.setDomContent(domContent);
+	remove: function () { this.unlink(); },
+	isRoot: function () { return false; }
+    });
+    
+    function RootTreeNode(child, pos, width, height) { 
+	AbstractTreeNode.call(this, null, null, null);
+	this.setChild(child);
+	this.setPos(pos);
 	this.setHeight(height);
 	this.setWidth(width);
     }
 
+    inherits(RootTreeNode, AbstractTreeNode);
+    
+    $.extend(RootTreeNode.prototype, {
+	getChild: function() { return this.child; },
+	setChild: function (child) { this.child = child; this.child.setParent(this);  },
+	setPos: function (pos) { this.getChild().setPos(pos); },
+	getPos: function () { return this.getChild().getPos(); },
+	setWidth: function (width) { this.getChild().setWidth(width); },
+	getWidth: function () { return this.getChild().getWidth(); },
+	setHeight: function (height) { this.getChild().setHeight(height); },
+	getHeight: function () { return this.getChild().getHeigth(); },
+	resizeFromLeft: function (offset) { this.getChild().resizeFromLeft(offset); },
+	resizeFromRight: function (offset) { this.getChild().resizeFromRight(offset); },
+	resizeFromTop: function (offset) { this.getChild().resizeFromTop(offset); },
+	resizeFromBottom: function (offset) { this.getChild().resizeFromBottom(offset); },
+	substituteNode: function (id, node) { 
+	    var child = this.getChild();
+	    if (child.getId() == id) { 
+		this.setChild(node);
+		child.unlink();
+	    }
+	}
+    });
+	
+    function LeafTreeNode(domContent, pos, width, height, parent, prevSibling, nextSibling) { 
+	AbstractTreeNode.call(this, parent, prevSibling, nextSibling);
+	this.setDomContent(domContent);
+	this.setPos(pos);
+	this.setHeight(height);
+	this.setWidth(width);
+    }
+    
     inherits(LeafTreeNode, AbstractTreeNode);
     
     $.extend(LeafTreeNode.prototype, {
 	setDomContent: function (domContent) { this.domContent = domContent; } ,
 	getDomContent: function () { return this.domContent; },
-	getWidth: function() { return this.domContent.getWidth(); },
-	setWidth: function (width) { this.domContent.setWidth(width); },
-	getHeight: function () { return this.domContent.getHeight(); },
-	setHeight: function (height) { return this.domContent.setHeight(height); },
-	resizeFromLeft: function (offset) { this.setWidth(this.getWidth() + offset); },
+	setPos: function (pos) { this.getDomContent().setPos(pos) },
+	getPos: function () { return this.getDomCOntent().getPos(); },
+	getWidth: function() { return this.getDomContent().getWidth(); },
+	setWidth: function (width) { this.getDomContent().setWidth(width); },
+	getHeight: function () { return this.getDomContent().getHeight(); },
+	setHeight: function (height) { return this.getDomContent().setHeight(height); },
+	remove: function () { this.unlink(); this.getDomContent().remove(); },
+	resizeFromLeft: function (offset) { 
+	    this.setPos(this.getPos().plusX(-offset));
+	    this.setWidth(this.getWidth() + offset); 
+	},
 	resizeFromRight: function (offset) { this.setWidth(this.getWidth() + offset); },
-	resizeFromTop: function (offset) { this.setHeight(this.getHeight() + offset); },
-	resizeFromBottom: function (offset) { this.setHeight(this.getHeight() + offset); }
+	resizeFromTop: function (offset) { 
+	    this.setPos(this.getPos().plusY(-offset));
+	    this.setHeight(this.getHeight() + offset); 
+	},
+	resizeFromBottom: function (offset) {this.setHeight(this.getHeight() + offset); }
     });
-
-    function AbstractSplitTreeNode(treeNode1, treeNode2, height, width, parent, prevSibling, nextSibling) { 
+    
+    function AbstractSplitTreeNode(treeNode1, treeNode2, pos, width, height, parent, prevSibling, nextSibling) { 
 	AbstractTreeNode.call(this, parent, prevSibling, nextSibling);
 	treeNode1.setPrevSibling(null);
 	treeNode1.setNextSibling(treeNode2);
@@ -98,15 +199,22 @@
 	this.setFirstChild(treeNode1);
 	this.setWidth(width);
 	this.setHeight(height);
+	this.setPos(pos);
     }
     
-    inherits(SplitTreeNode, AbstractTreeNode);
+    inherits(AbstractSplitTreeNode, AbstractTreeNode);
     
-    $.extend(SplitTreeNode.prototype, {
+    $.extend(AbstractSplitTreeNode.prototype, {
 	getWidth: function () { return this.width; },
-	setWidth: function (width) { this.adjustWidth(width); this.width = width; },
+	setWidth: function (width) { if (this.width != width) { this.width = width; this.setupChildren(); } },
 	getHeight: function () { return this.height; },
-	setHeight: function (height) { this.adjustHeight(height); this.height = height; },
+	setHeight: function (height) { if (this.height != height) { this.height = height; this.setupChildren(); } },
+	setPos: function (pos) { 
+	    if (!this.position || (this.position.getX() != pos.getX() || this.position.getY() != pos.getY())) {
+		this.position = pos; this.setupChildren(); 
+	    }
+	},
+	getPos: function () { return this.position; },
 	getFirstChild: function () { return this.firstChild; },
 	setFirstChild: function (child) { this.firstChild = child; },
 	getLastChild: function () { return this.mapChildren(function (child) { return child; }).pop(); },
@@ -115,7 +223,7 @@
 	    var outp = [];
 	    var node = this.getFirstChild();
 	    while (node) {
-		outp.push(f(node));
+		outp.push(f.call(this, node));
 		node = node.getNextSibling();
 	    }
 	    return outp;
@@ -166,7 +274,7 @@
 	    if (this.getNumberOfChildren() == 2) {
 		var otherNode = node.getPrevSibling() || node.getNextSibling();
 		this.getParent().substituteNode(this.getNodeId(), otherNode);
-		node.unlink();
+		node.remove();
 		return node;
 	    }
 
@@ -198,34 +306,64 @@
 		}
 	    });
 	},
-	delegateVariableDimensions: function (new_dims) { 
-	    var current_dims = this.mapChildren(function (child) { 
-		return child[this.variableDimGetter].call(child);
-	    }),
-	    current_dims_total = current_dims.sum();
-	    if(current_dims_total != new_dims) { 
-		var ratio = new_dims / current_dims_total,
-		    new_dim_cands = this.mapChildren(function (child) { 
-			return Math.floor(child[this.variableDimGetter].call(child) * ratio);
-		    }),
-		    new_dim_cands_sum = new_dim_cands.sum(),
-                    diff = new_dim_cands_sum - new_dims, 
-		    nr_children = this.getNumberOfChildren(),
-		    constant_diff = Math[diff > 0 ? "floor" : "ceil"].call(Math, diff / nr_children),
-		    spare = diff - constant_diff * nr_children;
+	setupChildren: function () { 
+	    var width = this.getWidth(), 
+	        height = this.getHeight(),
+	        pos = this.getPos();
+	   
+	    if (width == null || height == null || pos == null) return;
+	    var current_dims_total = this.mapChildren(this.getVariableDim).sum();
+	    
+	    var ratio = new_dims / current_dims_total,
+	        new_dim_cands = this.mapChildren(function (child) { 
+		    return Math.floor(this.getVariableDim(child) * ratio);
+		}),
+	        new_dim_cands_sum = new_dim_cands.sum(),
+	        diff = new_dim_cands_sum - new_dims, 
+	        nr_children = this.getNumberOfChildren(),
+	        constant_diff = Math[diff > 0 ? "floor" : "ceil"].call(Math, diff / nr_children),
+	        spare = diff - constant_diff * nr_children;
 
-		this.mapChildren(function (child) { 
-		    var correction = new_dim_cands.shift() + constant_diff;
-		    if (spare > 0) {
-			spare--;
-			correction++;
-		    } else if (spare < 0) {
-			spare++
-			correction--;
-		    }
-		    child[this.variableDimSetter].call(child, correction);
-		});
-	    }
+	    var pos_add_method = (this.getVariableDim() == "width" ) ? "plusX" : "plusY";
+	    
+	    this.mapChildren(function (child) { 
+		var correction = new_dim_cands.shift() + constant_diff;
+		if (spare > 0) {
+		    spare--;
+		    correction++;
+		} else if (spare < 0) {
+		    spare++
+		    correction--;
+		}
+		this.setVariableDim(child, correction);
+		child.setPos(pos);
+		pos = pos[pos_add_method].call(pos, correction);
+	    });
 	}
-    }));
+    });
+
+    function HorizontalSplitTreeNode(treeNode1, treeNode2, pos, width, height, parent, prevSibling, nextSibling) { 
+	AbstractSplitTreeNode.call(this, treeNode1, treeNode2, pos, width, height, parent, prevSibling, nextSibling);
+    }
+    
+    inherits(HorizontalSplitTreeNode, AbstractSplitTreeNode);
+    
+    $.extend(HorizontalSplitTreeNode.prototype, {
+	variableDim: function () { return "width"; },
+	setVariableDim: function (victim, value) { victim.setWidth(value); },
+	getVariableDim: function (victim) { return victim.getWidth(); }
+    });
+
+    function VerticalSplitTreeNode(treeNode1, treeNode2, pos, width, height, parent, prevSibling, nextSibling) { 
+	AbstractSplitTreeNode.call(this, treeNode1, treeNode2, pos, width, height, parent, prevSibling, nextSibling);
+    }
+    
+    inherits(VerticalSplitTreeNode, AbstractSplitTreeNode);
+    
+    $.extend(VerticalSplitTreeNode.prototype, {
+	variableDim: function () { return "height"; },
+	setVariableDim: function (victim, value) { victim.setHeight(value); },
+	getVariableDim: function (victim) { return victim.getHeight(); }
+    });
+ 
 })(jQuery);
