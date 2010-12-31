@@ -1,34 +1,9 @@
 (function ($) { 
     function inherits(to, from) {
-	function F() {}
-	F.prototype = from.prototype;
-	to.prototype = new F();
-	to.prototype.constructor = to;
-	to.prototype.superClass_ = from.prototype;
     }
     
     Array.prototype.reduce = Array.prototype.reduce || 
 	function (f, initialValue) { 
-	    var previousValue, currentValue, counter = 0;
-	    if (arguments.length >= 2) {
-		previousValue = initialValue; 
-		if (this.length == 0) { return previousValue; } 
-		currentValue = this[counter++];
-	    } else {
-		if (this.length == 0) 
-		    throw new TypeError();
-		if(this.length == 1) 
-		    return this[counter++];
-		previousValue = this[counter++];
-		nextValue = this[counter++];
-	    }
-
-	    while(true) {
-		previousValue = f(previousValue, currentValue, counter - 1, this);
-		if (counter >= this.length) return previousValue;
-		currentValue = this[counter++];
-	    };
-	}
 
     Array.prototype.sum = function (initial) { 
 	if (arguments.length == 0) 
@@ -40,7 +15,8 @@
 	}
 	return initial;
     };
-    
+
+	    
     var id_counter = 0;
     function getNextNodeId() { 
 	return id_counter++;
@@ -252,71 +228,7 @@
 	    }
 	    return outp;
 	},
-	addChild: function (child, pos) { 
-	    if (arguments.length == 1) 
-		pos = 0;
-	    var node = this.getFirstChild(), 
-	        prev_node = null;
-	    while(node && pos-- != 0) {
-		prev_node = node;
-		node = this.getNextSibling();
-	    }
-	    
-	    if (prev_node) { 
-		prev_node.setNextSibling(child);
-	    } else {
-		this.setFirstChild(child);
-	    }
-	    if (node) node.setPrevSibling(node);
-	    child.setNextSibling(node);
-	    child.setPrevSibling(prev_node);
-	    child.setParent(this);
-	    
-	    child[this.constantDimSetter].call(child, this[this.constantDimGetter].call(this));
-	    
-	    var shared_node = node || prev_node;
-	    if (shared_node) {
-		var old_node_dim = shared_node[this.variableDimGetter].call(shared_node);
-		var new_node_dim = Math.floor(old_node_dim / 2);
-		shared_node[this.variableDimSetter].call(shared_node, 
-							 new_node_dim + (old_node_dim % 2 == 1 ? 1 : 0));
-		child[this.variableDimSetter].call(child, new_node_dim);
-	    } else { 
-		child[this.variableDimSetter].call(child, this[this.variableDimGetter].call(this));
-	    }
-	    return child;
-	},
-	removeChild: function (pos) { 
-	    if (arguments.length == 0) pos = 0;
-	    var node = this.getFirstChild();
-	    
-	    while(node && pos-- != 0) { 
-		node = node.getNextSibling();
-	    }
 
-	    if (!node) return null;
-	    if (this.getNumberOfChildren() == 2) {
-		var otherNode = node.getPrevSibling() || node.getNextSibling();
-		this.getParent().substituteNode(this.getNodeId(), otherNode);
-		node.remove();
-		return node;
-	    }
-
-	    if (node.getPrevSibling()) {
-		node.getPrevSibling().setNextSibling(node.getNextSibling());
-	    } 
-	    if (node.getNextSibling()) {
-		node.getNextSibling().setPrevSibling(node.getPrevSibling()); 
-	    }
-	    
-	    var resizable_sibling = node.getNextSibling() || node.getPrevSibling();
-	    resizable_sibling[this.variableDimSetter].call(
-		resizable_sibling, 
-		resizable_sibling[this.variableDimGetter].call(resizable_sibling) + 
-		    node[this.variableDimGetter].call(node));
-
-	    return node;
-	},
 	substituteNode: function (id, newNode) { 
 	    var $this = this;
 	    this.mapChildren(function (child) { 
