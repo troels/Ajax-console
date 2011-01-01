@@ -1,19 +1,19 @@
 (function ($) { 
     $.bifrost = $.bifrost || {};
 
-    $.bifrost.inherits = function (to, from) { 
+    var inherits = $.bifrost.inherits = function (to, from) { 
 	function F() {}
 	F.prototype = from.prototype;
 	to.prototype = new F();
 	to.prototype.constructor = to;
 	to.prototype.superClass_ = from.prototype;
     }
-
+    
     function AssertionFailed(msg) {
 	Error.call(this, msg);
     }
     
-    $.bifrost.inherits(AssertionFailed, Error);
+    inherits(AssertionFailed, Error);
 
     var assert = $.bifrost.assert = function (condition, msg) { 
 	if (!condition) { 
@@ -119,6 +119,25 @@
 	this.getId = function () { return id; }
     }
     
+    $.extend(AbstractNode.prototype, { 
+	isLeft: function () { 
+	    return this.getParent() instanceof HorizontalSplitNode && 
+		this.getParent.getFirstChild() == this;
+	},
+	isRight: function () { 
+	    return this.getParent() instanceof HorizontalSplitNode && 
+		this.getParent.getSecondChild() == this;
+	},
+	isBottom: function () { 
+	    return this.getParent() instanceof VerticalSplitNode && 
+		this.getParent().getSecondChild() == this;
+	}, 
+	isTop: function () { 
+	    return this.getParent() instanceof VerticalSplitNode && 
+		this.getParent().getFirstChild() == this;
+	}
+    });
+
     function RootNode(child, dims) { 
 	assert((child === null || child instanceof Buffer || isNonRootNode(child)) &&
 	       dims instanceof Dimensions);
@@ -182,12 +201,12 @@
 	    assert(isInteger(id) && isNonRootNode(newNode));
 	    if (this.getFirstChild().getId() === id) {
 		return new this.constructor(newNode, this.getFirstChild().getDimensions(),
-					       this.getSecondChild(), this.getSecondChild().getDimensions(), 
-					       this.getParent());
+					    this.getSecondChild(), this.getSecondChild().getDimensions(), 
+					    this.getParent());
 	    } else if (this.getSecondChild().getId() == id){
 		return this.constructor(this.getFirstChild(), this.getFirstChild.getDimensions(),
-					       newNode, this.getSecondChild().getDimensions(), 
-					       this.getParent());
+					newNode, this.getSecondChild().getDimensions(), 
+					this.getParent());
 	    } else {
 		return this;
 	    }
@@ -218,6 +237,7 @@
     $.extend(HorizontalSplitNode.prototype, {
 	setDimensions: function (dims) { 
 	    assert(dims instanceof Dimensions);
+	    
 	    var secondWidth = Math.floor(
 		   dims.width() * this.getSecondChild().getDimensions().width() / this.getDimensions().width()),
 	        firsthWidth = dims.width() - secondWidth,
@@ -248,25 +268,9 @@
 	    var secondHeight = Math.floor(
 		    dims.width() * this.getSecondChild().getDimensions.height() / this.getDimensions().height()),
 	        firstHeight = dims.height()  - secondHeight,
-	        node1dims = new Dimensions(dims.left(), dims.top(), dims.width(), firstHeight()),
+	        node1dims = new Dimensions(dims.left(), dims.top(), dims.width(), firstHeight),
 	        node2dims = new Dimensions(dims.left(), dims.top() + firstHeight, dims.width(), secondHeight);
 	    return new this.constructor(node1, node1dims, node2, node2dims, parent);
 	}
     });
-
 })(jQuery);
-    
-    
-    
-
-	
-	
-    
-    
-		       
-    
-	
-	
-		
-
-	
