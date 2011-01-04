@@ -71,6 +71,16 @@
 	addTop: function (top) { assert(isNonNegative(this.top() + top)); 
 				 return new Dimensions(this.left(), this.top() + top,
 						       this.width(), this.height()); },
+	setLeft: function (left) { assert(isNonNegative(left)); 
+				   return new Dimensions(left, this.top(), 
+							 this.width(), this.height()); },
+	setTop: function (top) { assert(isNonNegative(top)); 
+				 return new Dimensions(this.left(), top,
+						       this.width(), this.height()); },
+	setWidth: function (width) { assert(isPositive(width));
+				     return new Dimensions(this.left(), this.top(), width, this.height()); },
+	setHeight: function (height) { assert(isPositive(height));
+				       return new Dimensions(this.left(), this.top(), this.width(), height); },
 	splitHorizontally: function () { 
 	    var secondWidth = Math.floor(this.width() / 2);
 	    var firstWidth = this.width() - secondWidth;
@@ -97,7 +107,7 @@
 	this.getDimensions = function () { return dimensions; };
     }
 
-    $.extends(Buffer.prototype, {
+    $.extend(Buffer.prototype, {
 	render: function () { $(this.getDomContent()).setDimensions(this.getDimensions()); },
 	hide: function () { $(this.getDomContent()).hide(); },
 	setDimensions: function (dims) { assert(dims instanceof Dimensions);
@@ -138,6 +148,25 @@
 	}
     });
 
+    function repairTree(node) { 
+	
+    function resizeLeft(node, offset) { 
+	if (node instanceof RootNode) 
+	    return node;
+	
+	if (node instanceof HorizontalNode) {
+	    var firstChild = node.getFirstChild(), secondChild = node.getSecondChild();
+	    
+	    return repairTree(node.getParent().substituteNode(
+		node.getId(), new HorizontalNode(firstChild, firstChild.getDimensions().addWidth(offset).addLeft(-offset),
+						 secondChild, secondChild.getDimensions().addWidth(offset).addLeft(-offset),
+						 node.getParent())));
+	}
+
+	return node.getParent().substituteNode(node, offset);
+    }
+
+    
     function RootNode(child, dims) { 
 	assert((child === null || child instanceof Buffer || isNonRootNode(child)) &&
 	       dims instanceof Dimensions);
